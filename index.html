@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Work Time Pro</title>
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000">
+
+<link rel="apple-touch-icon" href="Icon time-work.png">
+<link rel="icon" type="image/png" href="Icon time-work.png">
+
+<style>
+:root{
+  --bg:#000;
+  --glass:rgba(28,28,30,.72);
+  --glass-light:rgba(58,58,60,.55);
+  --stroke:rgba(255,255,255,.18);
+  --stroke-soft:rgba(255,255,255,.08);
+  --accent:#0A84FF;
+  --danger:#FF453A;
+  --radius:22px;
+  --sub:#8E8E93;
+}
+
+*{
+    box-sizing:border-box;
+    -webkit-tap-highlight-color:transparent;
+}
+
+body{
+  margin:0;
+  background:var(--bg);
+  color:#fff;
+  font-family:-apple-system,BlinkMacSystemFont,system-ui;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  overflow-x: hidden;
+}
+.hidden{display:none}
+
+.btn,.card,.timer,.day,.adjust,.input-card{
+  background:var(--glass);
+  backdrop-filter:blur(26px);
+  border-radius:var(--radius);
+  border:1px solid var(--stroke);
+  box-shadow:inset 0 0 0 1px var(--stroke-soft);
+}
+.btn{
+  padding:14px;
+  text-align:center;
+  color:var(--accent);
+  font-size:16px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  white-space:nowrap;
+}
+.btn svg{width:18px;height:18px;margin-right:8px;fill:currentColor}
+.btn:active,.adjust:active{transform:scale(.95)}
+.btn.disabled{opacity:.35;pointer-events:none}
+.btn.danger{color:var(--danger)}
+
+.card{padding:18px}
+
+/* КОНТЕКСТНЕ МЕНЮ */
+#contextMenu{
+    position:fixed;z-index:2000;min-width:180px;
+    background:rgba(44,44,46,.95);backdrop-filter:blur(20px);
+    border-radius:14px;overflow:hidden;
+    box-shadow:0 15px 35px rgba(0,0,0,.5);
+    transform:scale(0);transform-origin:top left;
+    transition:transform .15s cubic-bezier(.4,0,.2,1);
+    pointer-events:none;
+}
+#contextMenu.visible{transform:scale(1);pointer-events:auto}
+.menu-item{
+    padding:14px 18px;font-size:17px;color:#fff;
+    display:flex;justify-content:space-between;align-items:center;
+}
+.menu-item:active{background:rgba(255,255,255,.1)}
+
+/* ГОЛОВНИЙ ЕКРАН */
+.top{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px}
+.header{display:flex;justify-content:space-between;padding:14px;gap:12px}
+.header .btn{flex:1}
+
+.uapp-card-wrap{padding:6px 14px}
+.uapp-card{
+  padding:18px;cursor:pointer;
+}
+.uapp-card .name{font-size:18px}
+.uapp-card .today{margin-top:6px;font-size:13px;color:var(--sub)}
+.uapp-card:active{background:var(--glass-light)}
+
+.assign{padding:0 14px}
+
+.timer-wrap{display:flex;justify-content:center;margin:30px 0 16px}
+.timer{
+  width:260px;height:260px;border-radius:50%;position:relative;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:600;
+}
+.timer.active{
+  background:rgba(10,132,255,.25);border-color:rgba(10,132,255,.55);
+  box-shadow:0 0 40px rgba(10,132,255,.35);
+}
+.timer .time{z-index:2}
+
+.wave{
+  position:absolute;left:-50%;top:0;width:200%;height:200%;
+  background:linear-gradient(90deg,rgba(10,132,255,.35),rgba(10,132,255,.15),rgba(10,132,255,.35));
+  border-radius:45%;opacity:0;
+}
+.timer.active .wave{opacity:1;animation:wave 8s linear infinite}
+@keyframes wave{from{transform:translateX(-25%) rotate(0deg)}to{transform:translateX(25%) rotate(360deg)}}
+
+.time-adjust{display:flex;justify-content:center;gap:12px;margin:12px 0 18px}
+.adjust{
+  width:52px;height:52px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;color:var(--accent);font-size:15px;
+}
+
+.days{padding:14px;display:grid;gap:10px}
+.day{
+    display:flex;justify-content:space-between;padding:16px 14px;font-size:15px;
+    transition:transform .1s;
+}
+.day:active{transform:scale(.98);background:var(--glass-light)}
+
+.edit-container{padding:20px;display:flex;flex-direction:column;gap:20px}
+.edit-label{color:var(--sub);font-size:14px;margin-bottom:8px;padding-left:10px}
+.input-card{padding:15px}
+input.time-input{
+    background:transparent;border:none;color:#fff;
+    font-size:32px;width:100%;text-align:center;outline:none;
+}
+
+input[type=file]{display:none}
+</style>
+</head>
+
+<body onclick="hideMenu()">
+
+<div id="contextMenu">
+    <div class="menu-item" id="menuAction">Редагувати</div>
+</div>
+
+<!-- ГОЛОВНИЙ ЕКРАН -->
+<div id="home">
+  <div class="top">
+    <div class="btn" onclick="exportCSV()">Експорт CSV</div>
+    <div class="btn" onclick="importCSV()">Імпорт CSV</div>
+    <input type="file" id="fileInput">
+  </div>
+  <div class="uapp-card-wrap">
+    <div class="card uapp-card" onclick="openProject()">
+      <div class="name">UAPP</div>
+      <div class="today" id="today_uapp">Сьогодні 00:00:00</div>
+    </div>
+  </div>
+  <div class="assign" style="margin-top:12px">
+    <div class="btn disabled" id="assignUapp" onclick="assignMain()">Зачислити в UAPP</div>
+  </div>
+  <div class="timer-wrap">
+    <div id="mainTimer" class="timer"><div class="wave"></div><span class="time">00:00:00</span></div>
+  </div>
+  <div class="time-adjust">
+    <div class="adjust" onclick="adjustMain(-600000)">-10</div>
+    <div class="adjust" onclick="adjustMain(-60000)">-1</div>
+    <div class="adjust" onclick="adjustMain(60000)">+1</div>
+    <div class="adjust" onclick="adjustMain(600000)">+10</div>
+  </div>
+</div>
+
+<!-- СТАТИСТИКА UAPP -->
+<div id="projectView" class="hidden">
+  <div class="header">
+    <div class="btn" onclick="goHome()">← Назад</div>
+    <div class="btn danger" onclick="openTrash()">
+        <svg viewBox="0 0 448 512"><path d="M135.2 17.7C140.6 6.8 151.7 0 163.8 0H284.2c12.1 0 23.2 6.8 28.6 17.7L320 32h96c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 96 0 81.7 0 64S14.3 32 32 32h96l7.2-14.3zM32 128H416V448c0 35.3-28.7 64-64 64H96c-35.3 0-64-28.7-64-64V128zm96 64c-8.8 0-16 7.2-16 16V432c0 8.8 7.2 16 16 16s16-7.2 16-16V208c0-8.8-7.2-16-16-16zm96 0c-8.8 0-16 7.2-16 16V432c0 8.8 7.2 16 16 16s16-7.2 16-16V208c0-8.8-7.2-16-16-16zm96 0c-8.8 0-16 7.2-16 16V432c0 8.8 7.2 16 16 16s16-7.2 16-16V208c0-8.8-7.2-16-16-16z"/></svg>
+        Кошик
+    </div>
+  </div>
+  <div class="timer-wrap">
+    <div id="projectTimer" class="timer"><div class="wave"></div><span class="time">00:00:00</span></div>
+  </div>
+  <div class="time-adjust">
+    <div class="adjust" onclick="adjustProject(-600000)">-10</div>
+    <div class="adjust" onclick="adjustProject(-60000)">-1</div>
+    <div class="adjust" onclick="adjustProject(60000)">+1</div>
+    <div class="adjust" onclick="adjustProject(600000)">+10</div>
+  </div>
+  <div class="days" id="daysList"></div>
+</div>
+
+<!-- КОШИК -->
+<div id="trashView" class="hidden">
+    <div class="header"><div class="btn" onclick="showView('projectView')">← Назад</div></div>
+    <div class="edit-container">
+        <div class="edit-label">Кошик (затисніть для відновлення)</div>
+        <div class="days" id="trashList"></div>
+    </div>
+</div>
+
+<!-- РЕДАГУВАННЯ -->
+<div id="editView" class="hidden">
+    <div class="header">
+        <div class="btn" onclick="closeEdit()">← Скасувати</div>
+        <div class="btn" onclick="saveEdit()">Зберегти</div>
+    </div>
+    <div class="edit-container">
+        <div>
+            <div class="edit-label" id="editDateLabel">Дата</div>
+            <div class="input-card"><input type="text" id="editTimeInput" class="time-input"></div>
+        </div>
+        <div class="btn danger" onclick="moveToTrash()">Видалити в кошик</div>
+    </div>
+</div>
+
+<script>
+const daysUA=["Нд","Пн","Вт","Ср","Чт","Пт","Сб"];
+const fmt=t=>{
+  const s=Math.floor(Math.abs(t)/1000);
+  return String(Math.floor(s/3600)).padStart(2,"0")+":"+
+         String(Math.floor(s%3600/60)).padStart(2,"0")+":"+
+         String(s%60).padStart(2,"0");
+};
+const parseFmt=s=>{
+    const p=s.split(':').map(Number);
+    return p.length===3?(p[0]*3600+p[1]*60+p[2])*1000:0;
+};
+const dayKey=()=>new Date(Date.now()-5*3600000).toISOString().slice(0,10);
+const uappDayKey=()=>`main_UAPP_${dayKey()}`;
+
+/* ГОЛОВНИЙ ТАЙМЕР */
+let main={t:+localStorage.main_total||0,s:+localStorage.main_start||0,run:false};
+const mainTimer=document.getElementById("mainTimer");
+if(main.s){main.run=true;mainTimer.classList.add("active")}
+
+function tickMain(){
+  const v=main.run?main.t+(Date.now()-main.s):main.t;
+  mainTimer.querySelector(".time").textContent=fmt(v);
+  updateAssign();
+  requestAnimationFrame(tickMain);
+}
+mainTimer.onclick=()=>{
+  if(main.run){
+    main.t+=Date.now()-main.s;main.s=0;main.run=false;
+    localStorage.main_start=0;localStorage.main_total=main.t;
+    mainTimer.classList.remove("active");
+  } else {
+    main.s=Date.now();main.run=true;
+    localStorage.main_start=main.s;localStorage.main_total=main.t;
+    mainTimer.classList.add("active");
+  }
+};
+function adjustMain(d){main.t=Math.max(0,main.t+d);localStorage.main_total=main.t}
+function assignMain(){
+  if(!main.t)return;
+  const key=uappDayKey();
+  localStorage[key]=(+(localStorage[key]||0))+main.t;
+  main={t:0,s:0,run:false};
+  localStorage.main_start=0;localStorage.main_total=0;
+  mainTimer.classList.remove("active");
+  updateToday();
+}
+function updateAssign(){
+  const a=main.t>0;
+  document.getElementById("assignUapp").classList.toggle("disabled",!a);
+}
+function updateToday(){
+  const el=document.getElementById("today_uapp");
+  if(el)el.textContent="Сьогодні "+fmt(+localStorage[uappDayKey()]||0);
+}
+tickMain();updateToday();
+
+/* НАВІГАЦІЯ */
+let editingKey=null;
+function showView(id){
+  ['home','projectView','editView','trashView'].forEach(v=>
+    document.getElementById(v).classList.toggle('hidden',v!==id));
+}
+function goHome(){showView('home')}
+
+/* ТАЙМЕР ПРОЄКТУ */
+let proj={run:false,t:0,s:0};
+const projectTimer=document.getElementById("projectTimer");
+function loadProj(){
+  proj.t=+localStorage.proj_UAPP_total||0;
+  proj.s=+localStorage.proj_UAPP_start||0;
+  proj.run=!!proj.s;
+  projectTimer.classList.toggle("active",proj.run);
+  tickProj();loadDays();
+}
+function tickProj(){
+  const v=proj.run?proj.t+(Date.now()-proj.s):proj.t;
+  projectTimer.querySelector(".time").textContent=fmt(v);
+  if(!document.getElementById('projectView').classList.contains('hidden'))
+    requestAnimationFrame(tickProj);
+}
+projectTimer.onclick=()=>{
+  if(proj.run){
+    const d=Date.now()-proj.s;proj.t+=d;proj.s=0;proj.run=false;
+    const key=uappDayKey();
+    localStorage[key]=(+(localStorage[key]||0))+d;
+    localStorage.proj_UAPP_start=0;localStorage.proj_UAPP_total=proj.t;
+    loadDays();updateToday();
+  } else {
+    proj.s=Date.now();proj.run=true;
+    localStorage.proj_UAPP_start=proj.s;localStorage.proj_UAPP_total=proj.t;
+  }
+  projectTimer.classList.toggle("active",proj.run);
+};
+function adjustProject(d){
+  const key=uappDayKey();
+  localStorage[key]=(+(localStorage[key]||0))+d;
+  proj.t=Math.max(0,proj.t+d);
+  localStorage.proj_UAPP_total=proj.t;
+  loadDays();updateToday();
+}
+function openProject(){showView('projectView');loadProj()}
+
+/* КОНТЕКСТНЕ МЕНЮ */
+let pressTimer,lastX,lastY;
+const menu=document.getElementById('contextMenu');
+
+function dayTouchStart(e,key,isTrash=false){
+  const touch=e.touches?e.touches[0]:e;
+  lastX=touch.clientX;lastY=touch.clientY;
+  clearTimeout(pressTimer);
+  pressTimer=setTimeout(()=>{
+    if(e.cancelable)e.preventDefault();
+    showContextMenu(key,isTrash);
+  },700);
+}
+function dayTouchEnd(){clearTimeout(pressTimer)}
+function showContextMenu(key,isTrash){
+  const menuAction=document.getElementById('menuAction');
+  menuAction.textContent=isTrash?"Відновити":"Редагувати";
+  menuAction.onclick=(e)=>{
+    e.stopPropagation();
+    isTrash?restoreDay(key):openEditDay(key);
+    hideMenu();
+  };
+  const menuW=180,menuH=50;
+  let x=lastX,y=lastY;
+  if(x+menuW>window.innerWidth)x=window.innerWidth-menuW-10;
+  if(y+menuH>window.innerHeight)y=window.innerHeight-menuH-10;
+  menu.style.left=x+'px';menu.style.top=y+'px';
+  menu.classList.add('visible');
+}
+function hideMenu(){menu.classList.remove('visible')}
+window.oncontextmenu=function(e){
+  if(e.target.closest('.day')){e.preventDefault();e.stopPropagation();return false}
+};
+
+/* РЕДАГУВАННЯ */
+function openEditDay(key){
+  editingKey=key;
+  document.getElementById('editDateLabel').textContent="Редагування: "+key.split('_')[2];
+  document.getElementById('editTimeInput').value=fmt(+localStorage[key]||0);
+  showView('editView');
+}
+function closeEdit(){showView('projectView')}
+function saveEdit(){
+  localStorage[editingKey]=parseFmt(document.getElementById('editTimeInput').value);
+  if(editingKey===uappDayKey()){
+    proj.t=+localStorage[editingKey];
+    localStorage.proj_UAPP_total=proj.t;
+  }
+  loadDays();updateToday();closeEdit();
+}
+
+/* КОШИК */
+function moveToTrash(){
+  const trashKey="trash_"+editingKey;
+  localStorage[trashKey]=localStorage[editingKey];
+  localStorage.removeItem(editingKey);
+  if(editingKey===uappDayKey()){proj.t=0;localStorage.proj_UAPP_total=0}
+  loadDays();updateToday();closeEdit();
+}
+function openTrash(){showView('trashView');renderTrash()}
+function renderTrash(){
+  const list=document.getElementById("trashList");list.innerHTML="";
+  const prefix="trash_main_UAPP_";
+  Object.keys(localStorage).filter(k=>k.startsWith(prefix)).sort().reverse().forEach(key=>{
+    const d=key.split("_")[3];
+    const row=document.createElement("div");row.className="day";
+    row.innerHTML=`<span>${d}</span><span>${fmt(+localStorage[key])}</span>`;
+    row.onmousedown=(e)=>dayTouchStart(e,key,true);
+    row.onmouseup=dayTouchEnd;
+    row.ontouchstart=(e)=>dayTouchStart(e,key,true);
+    row.ontouchend=dayTouchEnd;
+    list.appendChild(row);
+  });
+}
+function restoreDay(trashKey){
+  const originalKey=trashKey.replace("trash_","");
+  localStorage[originalKey]=localStorage[trashKey];
+  localStorage.removeItem(trashKey);
+  if(originalKey===uappDayKey()){
+    proj.t=+localStorage[originalKey];
+    localStorage.proj_UAPP_total=proj.t;
+  }
+  renderTrash();loadDays();updateToday();
+}
+
+/* СПИСОК ДНІВ */
+function loadDays(){
+  const list=document.getElementById("daysList");list.innerHTML="";
+  const prefix="main_UAPP_";
+  Object.keys(localStorage).filter(k=>k.startsWith(prefix)).sort().reverse().forEach(key=>{
+    const d=key.split("_")[2];const D=new Date(d);
+    const row=document.createElement("div");row.className="day";
+    row.innerHTML=`<span>${d.slice(8,10)}.${d.slice(5,7)} ${daysUA[D.getDay()]}</span><span>${fmt(+localStorage[key])}</span>`;
+    row.onmousedown=(e)=>dayTouchStart(e,key);
+    row.onmouseup=dayTouchEnd;
+    row.ontouchstart=(e)=>dayTouchStart(e,key);
+    row.ontouchend=dayTouchEnd;
+    list.appendChild(row);
+  });
+}
+
+/* CSV */
+function exportCSV(){
+  let c="";Object.keys(localStorage).forEach(k=>c+=`${k},${localStorage[k]}\n`);
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([c]));
+  a.download="work-time.csv";a.click();
+}
+function importCSV(){document.getElementById('fileInput').click()}
+document.getElementById('fileInput').onchange=e=>{
+  const r=new FileReader();r.onload=()=>{
+    r.result.split("\n").forEach(l=>{const[k,v]=l.split(",");if(k)localStorage[k]=v});
+    location.reload();
+  };r.readAsText(e.target.files[0]);
+};
+</script>
+</body>
+</html>
